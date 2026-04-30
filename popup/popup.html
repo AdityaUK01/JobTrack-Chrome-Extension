@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>JobTrack</title>
+<link rel="stylesheet" href="popup.css">
+</head>
+<body>
+<div class="header">
+  <div>
+    <div class="logo">JobTrack</div>
+    <div class="header-sub">// auto apply logger</div>
+  </div>
+  <div class="header-right">
+    <button class="btn btn-sm" id="btn-export">↓ CSV</button>
+    <button class="btn btn-accent btn-sm" id="btn-add">+ Add</button>
+  </div>
+</div>
+<div class="stats-bar" id="stats-bar"></div>
+<div class="toolbar">
+  <div class="search-wrap">
+    <span class="search-icon">⌕</span>
+    <input type="text" id="q" placeholder="Search role, company…">
+  </div>
+  <select id="filter-status">
+    <option value="">All statuses</option>
+    <option>Applied</option><option>Phone Screen</option>
+    <option>Interview</option><option>Offer</option>
+    <option>Rejected</option><option>Ghosted</option>
+  </select>
+  <select id="sort">
+    <option value="newest">Newest</option>
+    <option value="oldest">Oldest</option>
+    <option value="company">Company</option>
+  </select>
+</div>
+<div class="tabs">
+  <div class="tab active" data-tab="kanban">Kanban</div>
+  <div class="tab" data-tab="list">List</div>
+</div>
+<div class="content" id="content"></div>
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal">
+    <div class="modal-title" id="modal-title">Edit Application</div>
+    <div class="form-row">
+      <div class="fg"><label>Company *</label><input id="f-company" placeholder="Google"></div>
+      <div class="fg"><label>Role *</label><input id="f-role" placeholder="Data Engineer"></div>
+    </div>
+    <div class="form-row">
+      <div class="fg">
+        <label>Status</label>
+        <select id="f-status">
+          <option>Applied</option><option>Phone Screen</option>
+          <option>Interview</option><option>Offer</option>
+          <option>Rejected</option><option>Ghosted</option>
+        </select>
+      </div>
+      <div class="fg"><label>Date Applied</label><input type="date" id="f-date"></div>
+    </div>
+    <div class="form-row">
+      <div class="fg"><label>Location</label><input id="f-location" placeholder="Delhi, India"></div>
+      <div class="fg"><label>Salary</label><input id="f-salary" placeholder="12 LPA"></div>
+    </div>
+    <div class="form-row">
+      <div class="fg"><label>Recruiter</label><input id="f-recruiter" placeholder="Name or email"></div>
+      <div class="fg"><label>Follow-up Date</label><input type="date" id="f-followup"></div>
+    </div>
+    <div class="fg"><label>Job URL</label><input type="url" id="f-url" placeholder="https://…"></div>
+    <div class="fg"><label>Notes</label><textarea id="f-notes" rows="3" placeholder="Key skills, next step…"></textarea></div>
+    <div id="f-err" style="display:none">Company and Role are required.</div>
+    <div class="modal-footer">
+      <button class="btn btn-del-modal" id="btn-del-modal" style="display:none">Delete</button>
+      <button class="btn" id="btn-cancel">Cancel</button>
+      <button class="btn btn-accent" id="btn-save">Save</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast">
+  <span id="toast-icon">✓</span>
+  <span id="toast-msg">Saved</span>
+</div>
+<script src="popup.js"></script>
+</body>
+</html>

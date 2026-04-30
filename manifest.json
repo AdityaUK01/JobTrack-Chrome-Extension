@@ -1,0 +1,61 @@
+{
+  "manifest_version": 3,
+  "name": "JobTrack — Auto Apply Logger",
+  "version": "1.0.0",
+  "description": "Auto-logs job applications from LinkedIn, Naukri, Indeed, Internshala the moment you click Apply.",
+  "permissions": ["storage", "notifications", "tabs", "alarms"],
+  "host_permissions": [
+    "https://www.linkedin.com/*",
+    "https://www.naukri.com/*",
+    "https://in.indeed.com/*",
+    "https://www.indeed.com/*",
+    "https://internshala.com/*",
+    "https://unstop.com/*",
+    "https://wellfound.com/*",
+    "https://cutshort.io/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.linkedin.com/jobs/*"],
+      "js": ["content/linkedin.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://www.naukri.com/*"],
+      "js": ["content/naukri.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://in.indeed.com/*", "https://www.indeed.com/*"],
+      "js": ["content/indeed.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://internshala.com/*"],
+      "js": ["content/internshala.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://unstop.com/*"],
+      "js": ["content/unstop.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://wellfound.com/*", "https://cutshort.io/*"],
+      "js": ["content/generic.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "JobTrack"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
