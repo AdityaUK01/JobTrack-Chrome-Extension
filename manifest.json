@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "JobTrack — Auto Apply Logger",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Auto-logs job applications from LinkedIn, Naukri, Indeed, Internshala the moment you click Apply.",
   "permissions": ["storage", "notifications", "tabs", "alarms"],
   "host_permissions": [
@@ -19,7 +19,7 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://www.linkedin.com/jobs/*"],
+      "matches": ["https://www.linkedin.com/*"],
       "js": ["content/linkedin.js"],
       "run_at": "document_idle"
     },
