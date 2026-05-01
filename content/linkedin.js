@@ -1,182 +1,187 @@
-// content/linkedin.js — LinkedIn Apply Detector (SPA-aware)
-// LinkedIn never does a full page reload. This script watches for URL changes
-// and re-attaches listeners every time a new job page is navigated to.
+// content/linkedin.js — LinkedIn v1.2 (robust rewrite)
 
 (function () {
   'use strict';
 
-  let lastFired   = 0;
-  let lastUrl     = '';
-  let observing   = false;
+  let lastFired  = 0;
+  let lastUrl    = '';
+  let modalWasOpen = false;
 
-  // ── Main init — runs on every URL change ──────────────────────────────────
-  function init() {
-    const url = location.href;
-    if (url === lastUrl) return;
-    lastUrl = url;
+  console.log('[JobTrack] LinkedIn script loaded on:', location.href);
 
-    // Only care about job detail pages
-    if (!url.includes('/jobs/view/') && !url.includes('/jobs/collections/') && !url.includes('/jobs/search/')) return;
-
-    attachButtonWatcher();
-    attachMutationWatcher();
-  }
-
-  // ── Watch for Apply / Easy Apply / Submit clicks ─────────────────────────
-  function attachButtonWatcher() {
-    // Remove old listener to avoid duplicates then re-add
-    document.removeEventListener('click', onClickCapture, true);
-    document.addEventListener('click', onClickCapture, true);
-  }
-
-  function onClickCapture(e) {
-    const btn = e.target.closest('button, a');
-    if (!btn) return;
-    const txt = (btn.innerText || '').trim().toLowerCase();
-    const cls = (btn.className || '');
-
-    // Easy Apply first click — we track when user submits, not here.
-    // But if they click the external "Apply" that opens company site, log it now.
-    const isExternalApply = (
-      (txt === 'apply' || txt.includes('apply on company')) &&
-      !txt.includes('easy')
-    );
-    if (isExternalApply) {
-      setTimeout(() => fire('external'), 800);
-      return;
-    }
-
-    // Easy Apply — final submit button inside the modal
-    const isSubmit = (
-      txt === 'submit application' ||
-      txt.includes('submit application') ||
-      (txt === 'done' && isInsideEasyApplyModal())
-    );
-    if (isSubmit) {
-      setTimeout(() => fire('easy-apply-submit'), 1000);
-    }
-  }
-
-  function isInsideEasyApplyModal() {
-    return !!document.querySelector(
-      '.jobs-easy-apply-modal, [data-test-modal-id="easy-apply-modal"]'
-    );
-  }
-
-  // ── MutationObserver — catch success screens ──────────────────────────────
-  function attachMutationWatcher() {
-    if (observing) return;
-    observing = true;
-
-    const observer = new MutationObserver(() => {
-      // "Your application was sent" confirmation
-      const body = document.body.innerText || '';
-      if (
-        body.includes('Your application was sent') ||
-        body.includes('application was submitted') ||
-        document.querySelector(
-          '.jobs-post-apply-modal, ' +
-          '[class*="post-apply"], ' +
-          '[class*="application-submitted"]'
-        )
-      ) {
-        fire('mutation-success');
-      }
-    });
-
-    observer.observe(document.body, { childList: true, subtree: true });
-  }
-
-  // ── Extract job data from DOM ─────────────────────────────────────────────
+  // ── Core: extract job from page ─────────────────────────────────────────
   function extract() {
-    // Try multiple selector patterns — LinkedIn updates their DOM often
-    const role =
-      t('h1.job-details-jobs-unified-top-card__job-title') ||
-      t('.job-details-jobs-unified-top-card__job-title h1') ||
-      t('h1.jobs-unified-top-card__job-title') ||
-      t('.jobs-unified-top-card__job-title h1') ||
-      t('h1.t-24.t-bold') ||
-      t('.job-title h1') ||
-      t('h1') || '';
+    // Try every known selector LinkedIn has ever used
+    const roleSelectors = [
+      'h1.job-details-jobs-unified-top-card__job-title',
+      '.job-details-jobs-unified-top-card__job-title h1',
+      'h1.jobs-unified-top-card__job-title',
+      '.jobs-unified-top-card__job-title h1',
+      '.job-view-layout h1',
+      '.jobs-details__main-content h1',
+      'h1.t-24',
+      'h1.t-24.t-bold',
+      '.topcard__title',
+      'h1',
+    ];
+    const companySelectors = [
+      '.job-details-jobs-unified-top-card__company-name a',
+      '.jobs-unified-top-card__company-name a',
+      '.topcard__org-name-link',
+      '.jobs-unified-top-card__subtitle-primary-grouping a',
+      '[class*="company-name"] a',
+      '[class*="companyName"] a',
+      '.job-details-jobs-unified-top-card__primary-description-container a',
+    ];
+    const locationSelectors = [
+      '.job-details-jobs-unified-top-card__primary-description-container .tvm__text',
+      '.jobs-unified-top-card__bullet',
+      '.topcard__flavor--bullet',
+      '.jobs-unified-top-card__workplace-type',
+      '[class*="location"]',
+    ];
 
-    const company =
-      t('.job-details-jobs-unified-top-card__company-name a') ||
-      t('.jobs-unified-top-card__company-name a') ||
-      t('.topcard__org-name-link') ||
-      t('[class*="company-name"] a') ||
-      t('[class*="companyName"] a') || '';
+    const role     = firstText(roleSelectors);
+    const company  = firstText(companySelectors);
+    const location = firstText(locationSelectors);
+    const url      = window.location.href.split('?')[0];
 
-    const location =
-      t('.job-details-jobs-unified-top-card__primary-description-container .tvm__text') ||
-      t('.jobs-unified-top-card__bullet') ||
-      t('.topcard__flavor--bullet') ||
-      t('[class*="workplace-type"]') || '';
-
-    const url = location.href ? location.href.split('?')[0] : window.location.href.split('?')[0];
-
-    return {
-      role:     clean(role),
-      company:  clean(company),
-      location: clean(location),
-      url,
-      source: 'LinkedIn',
-    };
+    console.log('[JobTrack] Extracted:', { role, company, location });
+    return { role, company, location, url, source: 'LinkedIn' };
   }
 
-  // ── Fire ─────────────────────────────────────────────────────────────────
+  function firstText(selectors) {
+    for (const sel of selectors) {
+      try {
+        const el = document.querySelector(sel);
+        if (el && el.innerText.trim()) return el.innerText.replace(/\s+/g,' ').trim();
+      } catch(e) {}
+    }
+    return '';
+  }
+
+  // ── Fire: dedupe and send ────────────────────────────────────────────────
   function fire(reason) {
     const now = Date.now();
-    if (now - lastFired < 8000) return; // debounce
-
-    const data = extract();
-    if (!data.role || !data.company) {
-      // Role/company missing — try again in 1s (DOM may still be rendering)
-      if (now - lastFired > 15000) {
-        setTimeout(() => {
-          const d2 = extract();
-          if (d2.role && d2.company) {
-            lastFired = Date.now();
-            send(d2);
-          }
-        }, 1000);
-      }
+    if (now - lastFired < 8000) {
+      console.log('[JobTrack] Skipping - debounce active');
       return;
     }
-
+    const data = extract();
+    if (!data.role || !data.company) {
+      console.log('[JobTrack] Missing role/company - not logging');
+      return;
+    }
     lastFired = now;
-    send(data);
-  }
-
-  function send(data) {
-    chrome.runtime.sendMessage({ type: 'JOB_APPLIED', data }, () => {
-      if (chrome.runtime.lastError) return; // extension context gone
+    console.log('[JobTrack] Firing! reason:', reason, data);
+    chrome.runtime.sendMessage({ type: 'JOB_APPLIED', data }, (res) => {
+      if (chrome.runtime.lastError) {
+        console.log('[JobTrack] sendMessage error:', chrome.runtime.lastError);
+        return;
+      }
+      console.log('[JobTrack] Background response:', res);
     });
     showToast(data.role, data.company);
   }
 
-  // ── SPA navigation watcher ────────────────────────────────────────────────
-  // LinkedIn uses History API — pushState/replaceState don't fire popstate
-  // We patch them + also listen to popstate for back/forward.
-  function watchNavigation() {
-    const _push    = history.pushState.bind(history);
-    const _replace = history.replaceState.bind(history);
+  // ── Strategy 1: click listener on document ───────────────────────────────
+  document.addEventListener('click', function(e) {
+    const el = e.target.closest('button, a, [role="button"]');
+    if (!el) return;
 
-    history.pushState = function (...args) {
-      _push(...args);
-      setTimeout(init, 400); // slight delay for DOM to update
-    };
-    history.replaceState = function (...args) {
-      _replace(...args);
-      setTimeout(init, 400);
-    };
+    const txt = (el.textContent || el.innerText || '').trim().toLowerCase();
+    const aria = (el.getAttribute('aria-label') || '').toLowerCase();
+    const combined = txt + ' ' + aria;
 
-    window.addEventListener('popstate', () => setTimeout(init, 400));
+    console.log('[JobTrack] Click detected on:', txt.slice(0, 40));
 
-    // Also poll as a fallback every 1.5s (cheap, just checks URL string)
-    setInterval(() => {
-      if (location.href !== lastUrl) init();
-    }, 1500);
+    // External apply button
+    if (
+      combined === 'apply' ||
+      combined.includes('apply on company') ||
+      combined.includes('apply now') ||
+      (combined.includes('apply') && !combined.includes('easy') && !combined.includes('not'))
+    ) {
+      console.log('[JobTrack] External apply clicked');
+      setTimeout(() => fire('external-apply'), 800);
+      return;
+    }
+
+    // Easy Apply modal open
+    if (combined.includes('easy apply')) {
+      console.log('[JobTrack] Easy Apply button clicked - waiting for submit');
+      modalWasOpen = true;
+      return;
+    }
+
+    // Inside Easy Apply modal: submit / done
+    if (
+      combined.includes('submit application') ||
+      combined === 'submit' ||
+      (combined === 'done' && modalWasOpen)
+    ) {
+      console.log('[JobTrack] Submit/Done clicked inside modal');
+      setTimeout(() => fire('easy-apply-submit'), 1000);
+      modalWasOpen = false;
+    }
+  }, true);
+
+  // ── Strategy 2: MutationObserver watches for success text ────────────────
+  const SUCCESS_PHRASES = [
+    'your application was sent',
+    'application was submitted',
+    'applied to',
+    'you applied',
+  ];
+
+  let lastBodyText = '';
+  const observer = new MutationObserver(() => {
+    const bodyText = (document.body.innerText || '').toLowerCase();
+    if (bodyText === lastBodyText) return;
+    lastBodyText = bodyText;
+
+    for (const phrase of SUCCESS_PHRASES) {
+      if (bodyText.includes(phrase)) {
+        console.log('[JobTrack] Success phrase found:', phrase);
+        fire('mutation-' + phrase.slice(0, 20));
+        break;
+      }
+    }
+
+    // Detect modal closing after being open
+    const modalOpen = !!document.querySelector(
+      '.jobs-easy-apply-modal, [data-test-modal-id="easy-apply-modal"], [aria-label="Easy Apply"]'
+    );
+    if (modalWasOpen && !modalOpen) {
+      console.log('[JobTrack] Easy Apply modal closed');
+      setTimeout(() => fire('modal-closed'), 500);
+      modalWasOpen = false;
+    }
+    if (modalOpen) modalWasOpen = true;
+  });
+
+  observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+
+  // ── Strategy 3: patch History API for SPA navigation ─────────────────────
+  function onUrlChange() {
+    const url = location.href;
+    if (url === lastUrl) return;
+    lastUrl = url;
+    console.log('[JobTrack] URL changed to:', url);
+    modalWasOpen = false;
+    lastBodyText = '';
   }
+
+  const _push    = history.pushState.bind(history);
+  const _replace = history.replaceState.bind(history);
+  history.pushState    = (...a) => { _push(...a);    setTimeout(onUrlChange, 300); };
+  history.replaceState = (...a) => { _replace(...a); setTimeout(onUrlChange, 300); };
+  window.addEventListener('popstate', () => setTimeout(onUrlChange, 300));
+
+  // Polling fallback for URL changes
+  setInterval(() => {
+    if (location.href !== lastUrl) onUrlChange();
+  }, 1000);
 
   // ── Toast ─────────────────────────────────────────────────────────────────
   function showToast(role, company) {
@@ -184,35 +189,26 @@
     if (old) old.remove();
     const t = document.createElement('div');
     t.id = 'jt-toast';
-    t.innerHTML = `<b style="color:#4ecca3">✓ JobTrack</b> &mdash; logged <i>${htmlEsc(role)}</i> at <i>${htmlEsc(company)}</i>`;
+    t.innerHTML = `<b style="color:#4ecca3">✓ JobTrack</b> &nbsp;logged <i>${esc(role)}</i> at <i>${esc(company)}</i>`;
     Object.assign(t.style, {
-      position: 'fixed', bottom: '28px', right: '28px', zIndex: '2147483647',
-      background: '#13141a', color: '#e8eaf2',
-      border: '1px solid #6c63ff', borderRadius: '10px',
-      padding: '12px 18px', fontSize: '13px',
-      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-      boxShadow: '0 8px 32px rgba(0,0,0,0.6)', lineHeight: '1.5',
-      maxWidth: '300px', cursor: 'pointer',
+      position:'fixed', bottom:'28px', right:'28px', zIndex:'2147483647',
+      background:'#13141a', color:'#e8eaf2',
+      border:'1px solid #6c63ff', borderRadius:'10px',
+      padding:'13px 18px', fontSize:'13px',
+      fontFamily:'-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif',
+      boxShadow:'0 8px 32px rgba(0,0,0,0.7)',
+      lineHeight:'1.5', maxWidth:'320px',
     });
-    t.onclick = () => t.remove();
     document.body.appendChild(t);
     setTimeout(() => { if (t.parentNode) t.remove(); }, 5000);
   }
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
-  function t(sel) {
-    const el = document.querySelector(sel);
-    return el ? el.innerText || '' : '';
-  }
-  function clean(s) {
-    return (s || '').replace(/\s+/g, ' ').trim();
-  }
-  function htmlEsc(s) {
-    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  function esc(s) {
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
 
-  // ── Boot ──────────────────────────────────────────────────────────────────
-  watchNavigation();
-  init(); // run once immediately for the current page
+  // ── Init ──────────────────────────────────────────────────────────────────
+  lastUrl = location.href;
+  console.log('[JobTrack] Ready. Watching:', lastUrl);
 
 })();

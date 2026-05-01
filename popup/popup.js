@@ -347,3 +347,29 @@ function today() {
 function genId() {
   return 'j_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5);
 }
+
+// ── Manual "Log current tab" ───────────────────────────────────────────────
+document.getElementById('btn-log-tab').addEventListener('click', async () => {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab) return;
+  const url = tab.url || '';
+  const title = tab.title || '';
+
+  // Parse "Role at Company" or "Role - Company | LinkedIn"
+  let role = '', company = '';
+  const atMatch    = title.match(/^(.+?)\s+(?:at|@)\s+(.+?)(?:\s*[\|\-]|$)/i);
+  const dashMatch  = title.match(/^(.+?)\s*[-–]\s*(.+?)(?:\s*[\|\-]\s*LinkedIn)?$/i);
+
+  if (atMatch)   { role = atMatch[1].trim();   company = atMatch[2].trim(); }
+  else if (dashMatch) { role = dashMatch[1].trim(); company = dashMatch[2].replace(/linkedin/i,'').trim(); }
+  else           { role = title.replace(/[\|\-].*$/,'').trim(); company = ''; }
+
+  // Open add modal pre-filled
+  openAdd();
+  setTimeout(() => {
+    if (role)    document.getElementById('f-role').value    = role;
+    if (company) document.getElementById('f-company').value = company;
+    document.getElementById('f-url').value = url;
+    document.getElementById('f-notes').value = 'Manually logged from tab';
+  }, 50);
+});
